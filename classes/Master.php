@@ -143,6 +143,8 @@ Class Master extends DBConnection {
 		return json_encode($resp);
 
 	}
+
+
 	function save_product(){
 		extract($_POST);
 		$data = "";
@@ -167,7 +169,7 @@ Class Master extends DBConnection {
 		}else{
 			$sql = "UPDATE `product_list` set {$data} where id = '{$id}' ";
 		}
-			$save = $this->conn->query($sql);
+		$save = $this->conn->query($sql);
 		if($save){
 			$pid = !empty($id) ? $id : $this->conn->insert_id;
 			$resp['status'] = 'success';
@@ -178,50 +180,31 @@ Class Master extends DBConnection {
 			if(!empty($_FILES['img']['tmp_name'])){
 				$dir = 'uploads/products/';
 				if(!is_dir(base_app.$dir))
-				mkdir(base_app.$dir);
+					mkdir(base_app.$dir, 0755, true); // Create the directory if it doesn't exist
+	
 				$ext = pathinfo($_FILES['img']['name'], PATHINFO_EXTENSION);
-				$fname = $dir.$pid.".png";
+				$fname = $dir.$pid.".".$ext;
 				$accept = array('image/jpeg','image/png');
-				if(!in_array($_FILES['img']['type'],$accept)){
-					$resp['msg'] .= "Image file type is invalid";
-				}
-				if($_FILES['img']['type'] == 'image/jpeg')
-					$uploadfile = imagecreatefromjpeg($_FILES['img']['tmp_name']);
-				elseif($_FILES['img']['type'] == 'image/png')
-					$uploadfile = imagecreatefrompng($_FILES['img']['tmp_name']);
-				if(!$uploadfile){
-					$resp['msg'] .= "Image is invalid";
-				}
-				list($width, $height) = getimagesize($_FILES['img']['tmp_name']);
-				if($width > 640 || $height > 480){
-					if($width > $height){
-						$perc = ($width - 640) / $width;
-						$width = 640;
-						$height = $height - ($height * $perc);
-					}else{
-						$perc = ($height - 480) / $height;
-						$height = 480;
-						$width = $width - ($width * $perc);
+	
+				if(!in_array($_FILES['img']['type'], $accept)){
+					$resp['msg'] .= " Image file type is invalid.";
+				} else {
+					if(move_uploaded_file($_FILES['img']['tmp_name'], base_app.$fname)){
+						$this->conn->query("UPDATE `product_list` set image_path = CONCAT('{$fname}', '?v=',unix_timestamp(CURRENT_TIMESTAMP)) where id = '{$pid}' ");
+					} else {
+						$resp['msg'] .= " Failed to upload the image.";
 					}
 				}
-				$temp = imagescale($uploadfile,$width,$height);
-				if(is_file(base_app.$fname))
-				unlink(base_app.$fname);
-				$upload =imagepng($temp,base_app.$fname,6);
-				if($upload){
-					$this->conn->query("UPDATE `product_list` set image_path = CONCAT('{$fname}', '?v=',unix_timestamp(CURRENT_TIMESTAMP)) where id = '{$pid}' ");
-				}
-				imagedestroy($temp);
 			}
-			
-		}else{
+		} else {
 			$resp['status'] = 'failed';
 			$resp['err'] = $this->conn->error."[{$sql}]";
 		}
 		if($resp['status'] == 'success')
 			$this->settings->set_flashdata('success',$resp['msg']);
-			return json_encode($resp);
+		return json_encode($resp);
 	}
+
 	function save_inventory(){
 		extract($_POST);
 		$data = "";

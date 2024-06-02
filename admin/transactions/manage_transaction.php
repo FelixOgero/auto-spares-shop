@@ -132,12 +132,15 @@ if(isset($_GET['id'])){
                                                 <label for="product_sel" class="control-label">Select Product</label>
                                                 <select id="product_sel" class="form-control form-control-sm rounded">
                                                     <option value="" disabled selected></option>
-                                                    <?php 
-                                                    $product_qry = $conn->query("SELECT * FROM `product_list` where delete_flag = 0 and `status` = 1 and (coalesce((SELECT SUM(quantity) FROM `inventory_list` where product_id = product_list.id),0) - coalesce((SELECT SUM(tp.qty) FROM `transaction_products` tp inner join `transaction_list` tl on tp.transaction_id = tl.id where tp.product_id = product_list.id and tl.status != 4),0)) > 0 ".(isset($id) ? " or id = '{$id}' " : "")." order by `name`");
+                                                    <?php
+                                                    $product_qry = $conn->query("SELECT pl.*, COALESCE((SELECT SUM(quantity) FROM `inventory_list` where product_id = pl.id),0) - COALESCE((SELECT SUM(tp.qty) FROM `transaction_products` tp INNER JOIN `transaction_list` tl ON tp.transaction_id = tl.id WHERE tp.product_id = pl.id AND tl.status != 4),0) AS available_quantity FROM `product_list` pl WHERE pl.delete_flag = 0 AND pl.`status` = 1 AND (COALESCE((SELECT SUM(quantity) FROM `inventory_list` WHERE product_id = pl.id),0) - COALESCE((SELECT SUM(tp.qty) FROM `transaction_products` tp INNER JOIN `transaction_list` tl ON tp.transaction_id = tl.id WHERE tp.product_id = pl.id AND tl.status != 4),0)) > 0 ".(isset($id) ? " OR pl.id = '{$id}' " : "")." ORDER BY pl.`name`");
                                                     while($row = $product_qry->fetch_assoc()):
+                                                        if ($row['available_quantity'] > 0):
                                                     ?>
-                                                    <option value="<?= $row['id'] ?>" data-price = "<?= $row['price'] ?>"><?= $row['name'] ?></option>
-                                                    <?php endwhile; ?>
+                                                    <option value="<?= $row['id'] ?>" data-price="<?= $row['price'] ?>" data-available-quantity="<?= $row['available_quantity'] ?>"><?= $row['name'] ?> (Available: <?= $row['available_quantity'] ?>)</option>
+                                                    <?php
+                                                        endif;
+                                                    endwhile; ?>
                                                 </select>
                                             </div>
                                         </div>
@@ -365,6 +368,13 @@ if(isset($_GET['id'])){
             if($('#product_sel').val() == null)
             return false;
             var id = $('#product_sel').val()
+
+            var availableQuantity = $('#product_sel option:selected').data('available-quantity');
+            if (availableQuantity <= 0) {
+                alert("The selected product is out of stock.");
+                return false;
+    }
+
             if($('#product-list tbody tr input[name="product_id[]"][value="'+id+'"]').length > 0){
                 alert("Product already on the list.")
                 return false;
@@ -397,9 +407,34 @@ if(isset($_GET['id'])){
         })
         $('#product-list, #service-list').find('td, th').addClass('px-2 py-1 align-middle')
         $('#transaction-form').submit(function(e){
-			e.preventDefault();
-            var _this = $(this)
-			 $('.err-msg').remove();
+			
+            e.preventDefault();
+            var _this = $(this);
+            $('.err-msg').remove();
+
+            // Check if the entered product quantities are valid
+            var isValidQuantity = true;
+            $('#product-list tbody tr').each(function(){
+                var productId = $(this).find('input[name="product_id[]"]').val();
+                var enteredQuantity = parseInt($(this).find('input[name="product_qty[]"]').val());
+                var availableQuantity = parseInt($('#product_sel option[value="' + productId + '"]').data('available-quantity'));
+
+                if (enteredQuantity > availableQuantity) {
+                    isValidQuantity = false;
+                    var productName = $(this).find('.product_name').text();
+                    var el = $('<div>');
+                    el.addClass("alert alert-danger err-msg").text('The quantity entered for "' + productName + '" exceeds the available quantity.');
+                    _this.prepend(el);
+                    el.show('slow');
+                    $("html, body,.modal").scrollTop(0);
+                }
+            });
+
+            if (!isValidQuantity) {
+                end_loader();
+                return false;
+            }
+
 			start_loader();
 			$.ajax({
 				url:_base_url_+"classes/Master.php?f=save_transaction",

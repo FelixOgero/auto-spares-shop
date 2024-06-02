@@ -35,13 +35,14 @@
 						<th>Product</th>
 						<th>Available Stock</th>
 						<th>Sold</th>
+						<th>ReOrder</th>
 						<th>Action</th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php 
 					$i = 1;
-						$qry = $conn->query("SELECT *, (coalesce((SELECT SUM(quantity) FROM `inventory_list` where product_id = product_list.id),0) - coalesce((SELECT SUM(tp.qty) FROM `transaction_products` tp inner join `transaction_list` tl on tp.transaction_id = tl.id where tp.product_id = product_list.id and tl.status != 4),0)) as `available`,coalesce((SELECT SUM(tp.qty) FROM `transaction_products` tp inner join `transaction_list` tl on tp.transaction_id = tl.id where tp.product_id = product_list.id and tl.status != 4),0) as `sold` from `product_list` where delete_flag = 0 order by `name` asc ");
+						$qry = $conn->query("SELECT *, (coalesce((SELECT SUM(quantity) FROM `inventory_list` where product_id = product_list.id),0) - coalesce((SELECT SUM(tp.qty) FROM `transaction_products` tp inner join `transaction_list` tl on tp.transaction_id = tl.id where tp.product_id = product_list.id and tl.status != 4),0)) as `available`, coalesce((SELECT SUM(tp.qty) FROM `transaction_products` tp inner join `transaction_list` tl on tp.transaction_id = tl.id where tp.product_id = product_list.id and tl.status != 4),0) as `sold`, IF((coalesce((SELECT SUM(quantity) FROM `inventory_list` where product_id = product_list.id),0) - coalesce((SELECT SUM(tp.qty) FROM `transaction_products` tp inner join `transaction_list` tl on tp.transaction_id = tl.id where tp.product_id = product_list.id and tl.status != 4),0)) <= 5, 'YES', 'NO') AS `reorder` from `product_list` where delete_flag = 0 order by `name` asc");
 						while($row = $qry->fetch_assoc()):
 					?>
 						<tr>
@@ -53,6 +54,7 @@
 							<td><?php echo $row['name'] ?></td>
 							<td class="text-right"><?php echo $row['available'] ?></td>
 							<td class="text-right"><?php echo $row['sold'] ?></td>
+							<td class="text-center"><?php echo $row['reorder'] ?></td>
 							<td align="center">
 								 <a href="./?page=inventory/view_details&id=<?= $row['id'] ?>" class="btn btn-flat p-1 btn-default btn-sm ">
 				                  		<i class="far fa-eye"></i> View
